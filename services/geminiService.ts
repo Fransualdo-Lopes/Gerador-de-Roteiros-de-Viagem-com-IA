@@ -20,6 +20,15 @@ const mapTravelersToText = (type: string) => {
   }
 };
 
+const mapTransportToText = (type: string) => {
+  switch (type) {
+    case 'car': return 'Carro Próprio';
+    case 'bus': return 'Ônibus de Viagem';
+    case 'plane': return 'Avião';
+    default: return 'Avião';
+  }
+};
+
 export const generateTravelItinerary = async (prefs: TravelPreferences, userId: string): Promise<Itinerary> => {
   if (!process.env.API_KEY) {
     throw new Error("Chave de API não configurada.");
@@ -28,16 +37,24 @@ export const generateTravelItinerary = async (prefs: TravelPreferences, userId: 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   const prompt = `
-    Crie um roteiro de viagem detalhado para ${prefs.destination} com duração de ${prefs.duration} dias.
-    Perfil: ${mapTravelersToText(prefs.travelers)}.
-    Orçamento: ${mapBudgetToText(prefs.budgetLevel)}.
-    Interesses: ${prefs.interests.join(', ') || 'turismo geral, gastronomia local'}.
+    Atue como um agente de viagens especialista.
+    Planeje uma viagem saindo de **${prefs.origin}** para **${prefs.destination}**.
     
-    Forneça uma estimativa de orçamento total na moeda local (BRL se Brasil, ou moeda do destino convertido).
-    Para cada atividade, sugira um horário, título, descrição curta, localização e custo estimado.
+    Detalhes da Viagem:
+    - Duração: ${prefs.duration} dias.
+    - Transporte: ${mapTransportToText(prefs.transportMode)}.
+    - Perfil: ${mapTravelersToText(prefs.travelers)}.
+    - Orçamento: ${mapBudgetToText(prefs.budgetLevel)}.
+    - Interesses: ${prefs.interests.join(', ') || 'turismo geral, gastronomia local'}.
+    
+    Tarefas:
+    1. Calcule a distância aproximada entre a origem e o destino.
+    2. Estime o tempo de viagem considerando o meio de transporte escolhido (${mapTransportToText(prefs.transportMode)}).
+    3. Crie um roteiro dia-a-dia detalhado.
+    4. Forneça uma estimativa de orçamento total na moeda local (BRL se Brasil, ou moeda do destino convertido).
     
     A resposta deve ser estritamente em JSON seguindo o schema fornecido.
-    Use português do Brasil para todo o conteúdo de texto.
+    Use português do Brasil para todo o conteúdo de texto. Adicione emojis aos temas dos dias.
   `;
 
   const activitySchema: Schema = {
@@ -57,7 +74,7 @@ export const generateTravelItinerary = async (prefs: TravelPreferences, userId: 
     type: Type.OBJECT,
     properties: {
       dayNumber: { type: Type.INTEGER },
-      theme: { type: Type.STRING, description: "Tema do dia (ex: Centro Histórico)" },
+      theme: { type: Type.STRING, description: "Tema do dia com Emoji (ex: 🏛️ Centro Histórico)" },
       activities: { type: Type.ARRAY, items: activitySchema }
     },
     required: ["dayNumber", "theme", "activities"]
@@ -72,10 +89,13 @@ export const generateTravelItinerary = async (prefs: TravelPreferences, userId: 
         type: Type.OBJECT,
         properties: {
           destination: { type: Type.STRING },
+          origin: { type: Type.STRING },
+          travelDistance: { type: Type.STRING, description: "Distância estimada (ex: 450 km)" },
+          travelTime: { type: Type.STRING, description: "Tempo de viagem estimado (ex: 5h 30m de carro)" },
           totalBudgetEstimate: { type: Type.STRING },
           days: { type: Type.ARRAY, items: daySchema }
         },
-        required: ["destination", "totalBudgetEstimate", "days"]
+        required: ["destination", "origin", "travelDistance", "travelTime", "totalBudgetEstimate", "days"]
       }
     }
   });
@@ -91,6 +111,10 @@ export const generateTravelItinerary = async (prefs: TravelPreferences, userId: 
     userId: userId,
     createdAt: new Date().toISOString(),
     destination: jsonResult.destination,
+    origin: prefs.origin, // Ensure we keep user input if AI varies slightly
+    transportMode: prefs.transportMode,
+    travelDistance: jsonResult.travelDistance,
+    travelTime: jsonResult.travelTime,
     totalBudgetEstimate: jsonResult.totalBudgetEstimate,
     days: jsonResult.days,
     // Add a placeholder image based on destination (random seed)

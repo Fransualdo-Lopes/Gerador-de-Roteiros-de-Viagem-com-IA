@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Calendar, Users, DollarSign, Sparkles, CheckCircle2, Globe, ShieldCheck } from 'lucide-react';
+import { MapPin, Calendar, Users, DollarSign, Sparkles, CheckCircle2, Globe, ShieldCheck, Car, Bus, Plane, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { generateTravelItinerary } from '../services/geminiService';
-import { TravelPreferences, UserRole } from '../types';
+import { TravelPreferences, TransportMode } from '../types';
+import { useToast } from '../context/ToastContext';
 
 interface HomeProps {
   onOpenAuth: () => void;
@@ -11,13 +12,16 @@ interface HomeProps {
 
 export const Home: React.FC<HomeProps> = ({ onOpenAuth }) => {
   const { isAuthenticated, user, saveItinerary } = useAuth();
+  const { addToast } = useToast();
   const navigate = useNavigate();
   
   const [loading, setLoading] = useState(false);
+  const [origin, setOrigin] = useState('');
   const [destination, setDestination] = useState('');
   const [days, setDays] = useState(3);
   const [budget, setBudget] = useState<'economic' | 'moderate' | 'luxury'>('moderate');
   const [travelers, setTravelers] = useState<'solo' | 'couple' | 'family' | 'friends'>('couple');
+  const [transportMode, setTransportMode] = useState<TransportMode>('plane');
   const [interests, setInterests] = useState('');
 
   // Store pending generation data if user needs to login
@@ -35,10 +39,12 @@ export const Home: React.FC<HomeProps> = ({ onOpenAuth }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const prefs: TravelPreferences = {
+      origin,
       destination,
       duration: days,
       budgetLevel: budget,
       travelers,
+      transportMode,
       interests: interests.split(',').map(i => i.trim()).filter(i => i)
     };
 
@@ -56,14 +62,36 @@ export const Home: React.FC<HomeProps> = ({ onOpenAuth }) => {
     try {
       const itinerary = await generateTravelItinerary(prefs, user.id);
       saveItinerary(itinerary);
+      addToast('Roteiro criado com sucesso!', 'success');
       navigate(`/itinerary/${itinerary.id}`);
     } catch (error) {
       console.error(error);
-      alert("Ocorreu um erro ao gerar o roteiro. Tente novamente.");
+      addToast('Erro ao gerar roteiro. Tente novamente.', 'error');
     } finally {
       setLoading(false);
     }
   };
+
+  const messages = [
+    "Consultando mapas...",
+    "Verificando melhores rotas...",
+    "Selecionando atrações...",
+    "Calculando custos...",
+    "Finalizando seu roteiro..."
+  ];
+
+  const [messageIndex, setMessageIndex] = useState(0);
+
+  React.useEffect(() => {
+    if (loading) {
+      const interval = setInterval(() => {
+        setMessageIndex((prev) => (prev + 1) % messages.length);
+      }, 2000);
+      return () => clearInterval(interval);
+    } else {
+      setMessageIndex(0);
+    }
+  }, [loading]);
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -84,12 +112,12 @@ export const Home: React.FC<HomeProps> = ({ onOpenAuth }) => {
                 <span className="text-brand-yellow">planejada com IA.</span>
               </h1>
               <p className="text-lg text-blue-100 mb-8 max-w-xl mx-auto lg:mx-0 leading-relaxed">
-                Crie roteiros personalizados em segundos. Otimize seu tempo e orçamento com recomendações inteligentes de quem entende de viagem.
+                Crie roteiros personalizados em segundos com cálculo de rotas e estimativas precisas.
               </p>
               
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <div className="flex items-center gap-2 text-blue-100 text-sm">
-                  <CheckCircle2 size={16} className="text-brand-coral" /> 100% Personalizado
+                  <CheckCircle2 size={16} className="text-brand-coral" /> Roteiros com Rotas
                 </div>
                 <div className="flex items-center gap-2 text-blue-100 text-sm">
                   <CheckCircle2 size={16} className="text-brand-coral" /> Gratuito para começar
@@ -103,18 +131,75 @@ export const Home: React.FC<HomeProps> = ({ onOpenAuth }) => {
                 <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-6 font-serif">Para onde vamos?</h3>
                 
                 <form onSubmit={handleSubmit} className="space-y-5">
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                      <MapPin size={16} className="text-brand-blue dark:text-sky-400" /> Destino
-                    </label>
-                    <input 
-                      required
-                      type="text" 
-                      value={destination}
-                      onChange={(e) => setDestination(e.target.value)}
-                      placeholder="Ex: Rio de Janeiro, Paris, Tóquio"
-                      className="w-full p-3 bg-gray-50 dark:bg-slate-700 dark:text-white border border-gray-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-brand-blue outline-none transition-all placeholder-gray-400 dark:placeholder-gray-500"
-                    />
+                  
+                  {/* Origin and Destination */}
+                  <div className="space-y-4">
+                    <div className="relative">
+                       <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 block">Saindo de</label>
+                       <div className="flex items-center">
+                         <MapPin size={18} className="absolute left-3 text-brand-coral" />
+                         <input 
+                           required
+                           type="text" 
+                           value={origin}
+                           onChange={(e) => setOrigin(e.target.value)}
+                           placeholder="Ex: São Paulo, SP"
+                           className="w-full pl-10 p-3 bg-gray-50 dark:bg-slate-700 dark:text-white border border-gray-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none transition-colors"
+                         />
+                       </div>
+                    </div>
+
+                    <div className="flex justify-center -my-2 relative z-10">
+                        <div className="bg-gray-100 dark:bg-slate-600 p-1.5 rounded-full text-gray-400 dark:text-gray-300">
+                            <ArrowRight size={16} className="rotate-90" />
+                        </div>
+                    </div>
+
+                    <div className="relative">
+                       <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 block">Indo para</label>
+                       <div className="flex items-center">
+                         <MapPin size={18} className="absolute left-3 text-brand-blue dark:text-sky-400" />
+                         <input 
+                           required
+                           type="text" 
+                           value={destination}
+                           onChange={(e) => setDestination(e.target.value)}
+                           placeholder="Ex: Rio de Janeiro, Paris"
+                           className="w-full pl-10 p-3 bg-gray-50 dark:bg-slate-700 dark:text-white border border-gray-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none transition-colors"
+                         />
+                       </div>
+                    </div>
+                  </div>
+
+                  {/* Transport Mode */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Como você vai?</label>
+                    <div className="grid grid-cols-3 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setTransportMode('car')}
+                          className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all ${transportMode === 'car' ? 'bg-blue-50 dark:bg-slate-700 border-brand-blue text-brand-blue dark:text-sky-400' : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700'}`}
+                        >
+                          <Car size={20} className="mb-1" />
+                          <span className="text-xs font-medium">Carro</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTransportMode('bus')}
+                          className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all ${transportMode === 'bus' ? 'bg-blue-50 dark:bg-slate-700 border-brand-blue text-brand-blue dark:text-sky-400' : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700'}`}
+                        >
+                          <Bus size={20} className="mb-1" />
+                          <span className="text-xs font-medium">Ônibus</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTransportMode('plane')}
+                          className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all ${transportMode === 'plane' ? 'bg-blue-50 dark:bg-slate-700 border-brand-blue text-brand-blue dark:text-sky-400' : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700'}`}
+                        >
+                          <Plane size={20} className="mb-1" />
+                          <span className="text-xs font-medium">Avião</span>
+                        </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -185,13 +270,13 @@ export const Home: React.FC<HomeProps> = ({ onOpenAuth }) => {
                   <button 
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-brand-coral hover:bg-red-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-red-200 dark:shadow-none transition-all transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="w-full bg-brand-coral hover:bg-red-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-red-200 dark:shadow-none transition-all transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 relative overflow-hidden"
                   >
                     {loading ? (
-                      <>
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                        Planejando Roteiro...
-                      </>
+                       <div className="flex flex-col items-center">
+                         <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mb-1"></div>
+                         <span className="text-xs font-normal animate-pulse">{messages[messageIndex]}</span>
+                       </div>
                     ) : (
                       <>
                         <Sparkles size={20} />

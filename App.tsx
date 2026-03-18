@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { ToastProvider } from './context/ToastContext';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { Home } from './pages/Home';
@@ -131,11 +132,13 @@ const App: React.FC = () => {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <Router>
-          <div className="flex flex-col min-h-screen">
-            <AppContent />
-          </div>
-        </Router>
+        <ToastProvider>
+          <Router>
+            <div className="flex flex-col min-h-screen">
+              <AppContent />
+            </div>
+          </Router>
+        </ToastProvider>
       </AuthProvider>
     </ThemeProvider>
   );
